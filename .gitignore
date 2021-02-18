@@ -27,7 +27,6 @@ wheels/
 full_data/
 .idea/
 .vscode/
-*.png
 *.npy
 code/output/
 # PyInstaller
