@@ -1,6 +1,6 @@
-# GraphHINGE
+# Heterogeneous INteract and aggreGatE (GraphHINGE)
 <p align="center">
-  <img src="image/graphhinge.png" width="500">
+  <img src="image/graphhinge.png" width="600">
   <br />
   <br />
 </p>
