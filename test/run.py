@@ -34,10 +34,6 @@ def train(model, device, optimizer, train_loader, eval_loader, save_dir, epochs,
         #train
         model.train()
         train_loss = []
-        train_auc = []
-        train_acc = []
-        train_logloss = []
-        train_f1 = []
         for i, data in enumerate(train_loader):
             UI, IU, UIUI, IUIU, UIAI1, IAIU1, UIAI2, IAIU2, UIAI3, IAIU3, labels = data
             optimizer.zero_grad()
@@ -50,29 +46,18 @@ def train(model, device, optimizer, train_loader, eval_loader, save_dir, epochs,
             loss = criterion(pred, labels.to(device))
             loss.backward()
             optimizer.step()
-
-            auc = utils.evaluate_auc(pred.detach().cpu().numpy(), labels.numpy())
-            acc = utils.evaluate_acc(pred.detach().cpu().numpy(), labels.numpy())
-            f1 = utils.evaluate_f1_score(pred.detach().cpu().numpy(), labels.numpy())
-            logloss = utils.evaluate_logloss(pred.detach().cpu().numpy(), labels.numpy())
+            
             train_loss.append(loss.item())
-            train_auc.append(auc)
-            train_acc.append(acc)
-            train_f1.append(f1)
-            train_logloss.append(logloss)
 
             train_iter= epoch * len(train_loader) + i
             if train_iter%10 ==0:
                 train_writer.add_scalar('train_loss', loss.item(), train_iter)
-                train_writer.add_scalar('train_auc', auc, train_iter)
-                train_writer.add_scalar('train_acc', acc, train_iter)
-                train_writer.add_scalar('train_f1', f1, train_iter)
-                train_writer.add_scalar('train_logloss', logloss, train_iter)
-
+                
             if i%500==0:
-                print('Epoch {:d} | Batch {:d} | Train Loss {:.4f} | Train AUC {:.4f} | Train ACC {:.4f} | Train F1 {:.4f} | Train Logloss {:.4f} | '.format(epoch + 1, i+1,loss, auc, acc, f1, logloss))
-                log_file.write('Epoch {:d} | Batch {:d} | Train Loss {:.4f} | Train AUC {:.4f} | Train ACC {:.4f} | Train F1 {:.4f} | Train Logloss {:.4f} | '.format(epoch + 1, i+1,loss, auc, acc, f1, logloss))
-            
+                print('Epoch {:d} | Batch {:d} | Train Loss {:.4f} | '.format(epoch + 1, i+1,loss))
+                log_file.write('Epoch {:d} | Batch {:d} | Train Loss {:.4f} | '.format(epoch + 1, i+1,loss))
+                
+
             del UI, IU, UIUI, IUIU, UIAI1, IAIU1, UIAI2, IAIU2, UIAI3, IAIU3, labels, pred
             gc.collect()
             with torch.cuda.device(device):
@@ -80,12 +65,9 @@ def train(model, device, optimizer, train_loader, eval_loader, save_dir, epochs,
             
 
         train_loss = np.mean(train_loss) 
-        train_auc = np.mean(train_auc)
-        train_acc = np.mean(train_acc)
-        train_f1 = np.mean(train_f1)
-        train_logloss = np.mean(train_logloss)
-        print('Epoch {:d} | Train Loss {:.4f} | Train AUC {:.4f} | Train ACC {:.4f} | Train F1 {:.4f} | Train Logloss {:.4f} | '.format(epoch + 1, train_loss, train_auc, train_acc, train_f1, train_logloss))
-        log_file.write('Epoch {:d} | Train Loss {:.4f} | Train AUC {:.4f} | Train ACC {:.4f} | Train F1 {:.4f} | Train Logloss {:.4f} | '.format(epoch + 1, train_loss, train_auc, train_acc, train_f1, train_logloss))
+        print('Epoch {:d} | Train Loss {:.4f} | '.format(epoch + 1, train_loss))
+        log_file.write('Epoch {:d} | Train Loss {:.4f} | '.format(epoch + 1, train_loss))
+        
 
         #eval
         model.eval()
@@ -105,15 +87,9 @@ def train(model, device, optimizer, train_loader, eval_loader, save_dir, epochs,
                 UIAI3.to(device), IAIU3.to(device))
 
                 loss = criterion(pred, labels.to(device))
-                auc = utils.evaluate_auc(pred.detach().cpu().numpy(), labels.numpy())
                 acc = utils.evaluate_acc(pred.detach().cpu().numpy(), labels.numpy())
-                f1 = utils.evaluate_f1_score(pred.detach().cpu().numpy(), labels.numpy())
-                logloss = utils.evaluate_logloss(pred.detach().cpu().numpy(), labels.numpy())
                 eval_loss.append(loss.item())
-                eval_auc.append(auc)
                 eval_acc.append(acc)
-                eval_f1.append(f1)
-                eval_logloss.append(logloss)
 
                 del UI,IU, UIUI, IUIU, UIAI1, IAIU1, UIAI2, IAIU2, UIAI3, IAIU3, labels, pred
                 gc.collect()
@@ -122,18 +98,12 @@ def train(model, device, optimizer, train_loader, eval_loader, save_dir, epochs,
                 
 
             eval_loss = np.mean(eval_loss)
-            eval_auc = np.mean(eval_auc)
             eval_acc = np.mean(eval_acc)
-            eval_f1 = np.mean(eval_f1)
-            eval_logloss = np.mean(eval_logloss)
-
-            print('Epoch {:d} | Eval Loss {:.4f} | Eval AUC {:.4f} | Eval ACC {:.4f} | Eval F1 {:.4f} | Eval Logloss {:.4f} | '.format(epoch + 1, eval_loss, eval_auc, eval_acc, eval_f1, eval_logloss))
-            log_file.write('Epoch {:d} | Eval Loss {:.4f} | Eval AUC {:.4f} | Eval ACC {:.4f} | Eval F1 {:.4f} | Eval Logloss {:.4f} | '.format(epoch + 1, eval_loss, eval_auc, eval_acc, eval_f1, eval_logloss))
+            
+            print('Epoch {:d} | Eval Loss {:.4f} | Eval ACC {:.4f} | '.format(epoch + 1, eval_loss, eval_acc))
+            log_file.write('Epoch {:d} | Eval Loss {:.4f} | Eval ACC {:.4f} | '.format(epoch + 1, eval_loss, eval_acc))
             eval_writer.add_scalar('eval_loss', eval_loss, train_iter)
-            eval_writer.add_scalar('eval_auc', eval_auc, train_iter)
             eval_writer.add_scalar('eval_acc', eval_acc, train_iter)
-            eval_writer.add_scalar('eval_f1', eval_f1, train_iter)
-            eval_writer.add_scalar('eval_logloss', eval_logloss, train_iter)
             if eval_acc > best_val_acc:
                 best_val_acc = eval_acc
                 log_file.write("Saving best weights...\n")
