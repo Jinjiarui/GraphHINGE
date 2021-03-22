@@ -201,7 +201,7 @@ if __name__ == "__main__":
     parser.add_argument('-heads', type=int, default=3, help='Attention heads.')
     parser.add_argument('-lr', type=float, default=0.001, help='Learning rate.')
     parser.add_argument('-wd', type=float, default=0.0009, help='Weight decay.')
-    parser.add_argument('-epochs', type=int, default=20,help='Epoch.')
+    parser.add_argument('-epochs', type=int, default=500,help='Maximum Epoch.')
 
     parser.add_argument('-model', type=str, default='GraphHINGE_FFT',help='Model.')
     parser.add_argument('-save_dir', type=str, default='../out',help='Trained models to be saved.')
@@ -260,6 +260,6 @@ if __name__ == "__main__":
     log_file = open(os.path.join(args.save_dir, log_name), "w+")
     model_name = args.model + '_'+ args.d + '_'+ args.model_num +'.pth'
     save_dir = args.save_dir
-    #train(model, device, optimizer, train_loader, eval_loader, args.save_dir, args.epochs, log_file, model_name,patience=3)
-    #model.load_state_dict(torch.load(os.path.join(args.save_dir, model_name)))
+    train(model, device, optimizer, train_loader, eval_loader, args.save_dir, args.epochs, log_file, model_name,patience=25)
+    model.load_state_dict(torch.load(os.path.join(args.save_dir, model_name)))
     test(model, device, test_loader)
