@@ -26,6 +26,7 @@ def train(model, device, optimizer, train_loader, eval_loader, save_dir, epochs,
     train_writer = SummaryWriter(log_dir=train_dir)
     eval_writer = SummaryWriter(log_dir=eval_dir)
     best_val_acc = 0.0
+    cnt = 0
     for epoch in range(epochs):
         print("-------Epoch {}----------".format(epoch+1))
         log_file.write("Epoch {} >>".format(epoch+1))
@@ -94,8 +95,6 @@ def train(model, device, optimizer, train_loader, eval_loader, save_dir, epochs,
         eval_logloss = []
         eval_f1 = []
         with torch.no_grad():
-            last_loss = 0.0
-            cnt = 0
             for i, data in enumerate(eval_loader):
                 UI, IU, UIUI, IUIU, UIAI1, IAIU1, UIAI2, IAIU2, UIAI3, IAIU3, labels = data
                 
@@ -135,18 +134,17 @@ def train(model, device, optimizer, train_loader, eval_loader, save_dir, epochs,
             eval_writer.add_scalar('eval_acc', eval_acc, train_iter)
             eval_writer.add_scalar('eval_f1', eval_f1, train_iter)
             eval_writer.add_scalar('eval_logloss', eval_logloss, train_iter)
-            if eval_acc >= best_val_acc:
+            if eval_acc > best_val_acc:
                 best_val_acc = eval_acc
                 log_file.write("Saving best weights...\n")
                 torch.save(model.state_dict(), os.path.join(save_dir,model_name))
-            if eval_loss > last_loss:
-                cnt=cnt+1
-            else:
-                cnt=0
-            last_loss = eval_loss
-            if cnt == patience:
-                print("Early stopping")
-                break
+                cnt = 0
+            else: 
+                cnt = cnt + 1
+                if cnt >= patience:
+                    print("Early stopping")
+                    break
+            
 
 def test(model, device, test_loader):
     test_dir = save_dir+'/Logs/'+model_name+'_test'
