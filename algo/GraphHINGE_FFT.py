@@ -19,10 +19,10 @@ class NodeAttention(nn.Module):
         self.atn_heads = atn_heads
         self.softmax = torch.nn.Softmax(dim=1)
         self.temp = temp
-        
-        self.Wt = nn.Parameter(utils.glorot((atn_heads, in_size, out_size)))
-        self.Ws = nn.Parameter(utils.glorot((atn_heads, in_size, out_size)))
-        self.Wc = nn.Parameter(utils.glorot((atn_heads, in_size, out_size)))
+        self.initializer = nn.init.xavier_uniform_
+        self.Wt = nn.Parameter(self.initializer(torch.empty(atn_heads, in_size, out_size)))
+        self.Ws = nn.Parameter(self.initializer(torch.empty(atn_heads, in_size, out_size)))
+        self.Wc = nn.Parameter(self.initializer(torch.empty(atn_heads, in_size, out_size)))
 
         self.path_att = nn.Sequential(
             nn.Linear(in_size, out_size),
