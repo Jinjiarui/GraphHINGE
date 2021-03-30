@@ -6,6 +6,31 @@ import sys
 sys.path.append("..")
 from utils import data_loader,utils
 
+class Interaction(nn.Module):
+    def __init__(self, s_padding, t_padding):
+        super(Interaction, self).__init__()
+        self.ms = torch.nn.ZeroPad2d((0,0,0,s_padding))
+        self.mt = torch.nn.ZeroPad2d((0,0,0,t_padding))
+       
+    def forward(self, s, t):
+        #s,t: B*L*E*N
+        s_imaginary=s*0
+        t_imaginary=t*0
+        fs=torch.stack((s,s_imaginary),4)
+        ft=torch.stack((t,t_imaginary),4)
+        ft=self.mt(ft)
+        fs=self.ms(fs)
+        fs=torch.Tensor.fft(fs,1)
+        ft=torch.Tensor.fft(ft,1)
+        rr=torch.Tensor.mul(fs[:,:,:,:,0],ft[:,:,:,:,0])
+        ii=torch.Tensor.mul(fs[:,:,:,:,1],ft[:,:,:,:,1])
+        ri=torch.Tensor.mul(fs[:,:,:,:,0],ft[:,:,:,:,1])
+        ir=torch.Tensor.mul(fs[:,:,:,:,1],ft[:,:,:,:,0])
+        h=torch.stack((rr-ii,ri+ir),axis=4)
+        h=torch.Tensor.ifft(h,1)
+        h=h[:,:,:,:,0] #B*L*E*(Is+It-1)
+        h=h.permute(0,1,3,2) #B*L*(Is+It-1)*E
+        return h
 
 class NodeAttention(nn.Module):
     def __init__(self, in_size, out_size=128, atn_heads = 3, temp = 0.2):
@@ -91,6 +116,10 @@ class GraphHINGE(nn.Module):
         self.attr1_emb = nn.Embedding(attr1_num+1, in_size, padding_idx=0)
         self.attr2_emb = nn.Embedding(attr2_num+1, in_size, padding_idx=0)
         self.attr3_emb = nn.Embedding(attr3_num+1, in_size, padding_idx=0)
+        '''
+        self.Interaction0 = Interaction(1,1)
+        self.Interaction = Interaction(3,3)
+        '''
         self.NodeAttention = nn.ModuleList()
         for i in range(0,5):
             self.NodeAttention.append(NodeAttention(in_size, hidden_size, num_heads, temp1))
@@ -101,6 +130,7 @@ class GraphHINGE(nn.Module):
             nn.Linear(out_size, 1)
         )
     
+    
     def interaction(self, s, t):
         #s,t: B*L*E*N
         length = s.shape[-1] + t.shape[-1]
@@ -110,6 +140,7 @@ class GraphHINGE(nn.Module):
         h = torch.fft.ifft(h)
         h = h.permute(0,1,3,2).float() #B*L*(Is+It-1)*E
         return h
+    
 
     def forward(self, UI, IU, UIUI, IUIU, UIAI1, IAIU1, UIAI2, IAIU2, UIAI3, IAIU3):
         user_idx = UI[:,0,0] #B
@@ -129,16 +160,13 @@ class GraphHINGE(nn.Module):
         uiai3 = torch.stack((self.user_emb(UIAI3[:,:,0]), self.item_emb(UIAI3[:,:,1]), self.attr3_emb(UIAI3[:,:,2]), self.item_emb(UIAI3[:,:,3])),3) #B*L*E*N
         iaiu3 = torch.stack((self.item_emb(IAIU3[:,:,0]), self.attr3_emb(IAIU3[:,:,1]), self.item_emb(IAIU3[:,:,2]), self.user_emb(IAIU3[:,:,3])),3) #B*L*E*N
         
-        user_features = [uiui,uiai1,uiai2,uiai3]
-        item_features = [iuiu,iaiu1,iaiu2,iaiu3]
+        user_features = [ui, uiui, uiai1, uiai2, uiai3]
+        item_features = [iu, iuiu, iaiu1, iaiu2, iaiu3]
         H=[]
 
-        h=self.interaction(ui,iu)
-        h=self.NodeAttention[0](h)
-        H.append(h)
         for i in range(0,len(user_features)):
             h = self.interaction(user_features[i], item_features[i])
-            h = self.NodeAttention[i+1](h)
+            h = self.NodeAttention[i](h)
             H.append(h)
         
         Z = torch.stack(H,1)
