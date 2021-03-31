@@ -13,7 +13,7 @@ import tqdm
 import datetime
 from time import time
 from algo import GraphHINGE_FFT,GraphHINGE_Conv,GraphHINGE_Cross,GraphHINGE_CrossConv,GraphHINGE_ALL
-from tensorboardX import SummaryWriter
+#from tensorboardX import SummaryWriter
 import numpy as np
 
 def train(model, device, optimizer, train_loader, eval_loader, save_dir, epochs, log_file, model_name, patience):
@@ -30,7 +30,7 @@ def train(model, device, optimizer, train_loader, eval_loader, save_dir, epochs,
     for epoch in range(epochs):
         print("-------Epoch {}----------".format(epoch+1))
         log_file.write("Epoch {} >>".format(epoch+1))
-        
+        t0=time()
         #train
         model.train()
         train_loss = []
@@ -48,7 +48,7 @@ def train(model, device, optimizer, train_loader, eval_loader, save_dir, epochs,
             optimizer.step()
             
             train_loss.append(loss.item())
-
+            '''
             train_iter= epoch * len(train_loader) + i
             if train_iter%10 ==0:
                 train_writer.add_scalar('train_loss', loss.item(), train_iter)
@@ -62,13 +62,15 @@ def train(model, device, optimizer, train_loader, eval_loader, save_dir, epochs,
             gc.collect()
             with torch.cuda.device(device):
                 torch.cuda.empty_cache()
-            
+            '''
 
         train_loss = np.mean(train_loss) 
         print('Epoch {:d} | Train Loss {:.4f} | '.format(epoch + 1, train_loss))
-        log_file.write('Epoch {:d} | Train Loss {:.4f} | '.format(epoch + 1, train_loss))
+        #log_file.write('Epoch {:d} | Train Loss {:.4f} | '.format(epoch + 1, train_loss))
         
-
+        t1=time()
+        print("Train time: {}".format(t1-t0))
+        t0=time()
         #eval
         model.eval()
         eval_loss = []
@@ -77,6 +79,7 @@ def train(model, device, optimizer, train_loader, eval_loader, save_dir, epochs,
         eval_logloss = []
         eval_f1 = []
         with torch.no_grad():
+            t0=time()
             for i, data in enumerate(eval_loader):
                 UI, IU, UIUI, IUIU, UIAI1, IAIU1, UIAI2, IAIU2, UIAI3, IAIU3, labels = data
                 
@@ -91,28 +94,34 @@ def train(model, device, optimizer, train_loader, eval_loader, save_dir, epochs,
                 eval_loss.append(loss.item())
                 eval_acc.append(acc)
 
+                '''
                 del UI,IU, UIUI, IUIU, UIAI1, IAIU1, UIAI2, IAIU2, UIAI3, IAIU3, labels, pred
                 gc.collect()
                 with torch.cuda.device(device):
                     torch.cuda.empty_cache()
-                
+                '''
 
             eval_loss = np.mean(eval_loss)
             eval_acc = np.mean(eval_acc)
-            
+
+            t1=time()
+            print("Eval time: {}".format(t1-t0))
+
             print('Epoch {:d} | Eval Loss {:.4f} | Eval ACC {:.4f} | '.format(epoch + 1, eval_loss, eval_acc))
-            log_file.write('Epoch {:d} | Eval Loss {:.4f} | Eval ACC {:.4f} | '.format(epoch + 1, eval_loss, eval_acc))
-            eval_writer.add_scalar('eval_loss', eval_loss, train_iter)
-            eval_writer.add_scalar('eval_acc', eval_acc, train_iter)
+            #log_file.write('Epoch {:d} | Eval Loss {:.4f} | Eval ACC {:.4f} | '.format(epoch + 1, eval_loss, eval_acc))
+            #eval_writer.add_scalar('eval_loss', eval_loss, train_iter)
+            #eval_writer.add_scalar('eval_acc', eval_acc, train_iter)
             if eval_acc > best_val_acc:
                 best_val_acc = eval_acc
-                log_file.write("Saving best weights...\n")
+                best_epoch = epoch
+                #log_file.write("Saving best weights...\n")
                 torch.save(model.state_dict(), os.path.join(save_dir,model_name))
                 cnt = 0
             else: 
                 cnt = cnt + 1
                 if cnt >= patience:
                     print("Early stopping")
+                    print("best epoch:{}".format(best_epoch))
                     break
             
 
@@ -120,7 +129,7 @@ def test(model, device, test_loader):
     test_dir = save_dir+'/Logs/'+model_name+'_test'
     if not os.path.exists(test_dir):
         os.mkdir(test_dir)
-    test_writer = SummaryWriter(log_dir=test_dir)
+    #test_writer = SummaryWriter(log_dir=test_dir)
     test_loss = []
     test_auc = []
     test_acc = []
@@ -134,6 +143,7 @@ def test(model, device, test_loader):
             UIAI1.to(device), IAIU1.to(device), \
             UIAI2.to(device), IAIU2.to(device), \
             UIAI3.to(device), IAIU3.to(device))
+        
             loss = criterion(pred, labels.to(device))
 
             auc = utils.evaluate_auc(pred.detach().cpu().numpy(), labels.numpy())
@@ -145,24 +155,29 @@ def test(model, device, test_loader):
             test_acc.append(acc)
             test_f1.append(f1)
             test_logloss.append(logloss)
+            '''
             test_writer.add_scalar('test_loss', loss.item(), i)
             test_writer.add_scalar('test_auc', auc, i)
             test_writer.add_scalar('test_acc', acc, i)
             test_writer.add_scalar('test_f1', f1, i)
             test_writer.add_scalar('test_logloss', logloss, i)
+            
             del UI, IU, UIUI, IUIU, UIAI1, IAIU1, UIAI2, IAIU2, UIAI3, IAIU3, labels, pred
             gc.collect()
             
             with torch.cuda.device(device):
                 torch.cuda.empty_cache()
-
+            '''
+            
+        
         test_loss = np.mean(test_loss)
         test_auc = np.mean(test_auc)
         test_acc = np.mean(test_acc)
         test_f1 = np.mean(test_f1)
         test_logloss = np.mean(test_logloss)
         print('Test Loss {:.4f} | Test AUC {:.4f} | Test ACC {:.4f} | Test F1 {:.4f} | Test Logloss {:.4f} |'.format(test_loss, test_auc, test_acc, test_f1, test_logloss))
-        log_file.write('Test Loss {:.4f} | Test AUC {:.4f} | Test ACC {:.4f} | Test F1 {:.4f} | Test Logloss {:.4f} |'.format(test_loss, test_auc, test_acc, test_f1, test_logloss))
+        #log_file.write('Test Loss {:.4f} | Test AUC {:.4f} | Test ACC {:.4f} | Test F1 {:.4f} | Test Logloss {:.4f} |'.format(test_loss, test_auc, test_acc, test_f1, test_logloss))
+        
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Parameters.')
@@ -230,6 +245,6 @@ if __name__ == "__main__":
     log_file = open(os.path.join(args.save_dir, log_name), "w+")
     model_name = args.model + '_'+ args.d + '_'+ args.model_num +'.pth'
     save_dir = args.save_dir
-    train(model, device, optimizer, train_loader, eval_loader, args.save_dir, args.epochs, log_file, model_name,patience=25)
+    #train(model, device, optimizer, train_loader, eval_loader, args.save_dir, args.epochs, log_file, model_name,patience=25)
     model.load_state_dict(torch.load(os.path.join(args.save_dir, model_name)))
     test(model, device, test_loader)
