@@ -23,8 +23,8 @@ def train(model, device, optimizer, train_loader, eval_loader, save_dir, epochs,
         os.mkdir(train_dir)
     if not os.path.exists(eval_dir):
         os.mkdir(eval_dir)
-    train_writer = SummaryWriter(log_dir=train_dir)
-    eval_writer = SummaryWriter(log_dir=eval_dir)
+    #train_writer = SummaryWriter(log_dir=train_dir)
+    #eval_writer = SummaryWriter(log_dir=eval_dir)
     best_val_acc = 0.0
     cnt = 0
     for epoch in range(epochs):
@@ -245,6 +245,6 @@ if __name__ == "__main__":
     log_file = open(os.path.join(args.save_dir, log_name), "w+")
     model_name = args.model + '_'+ args.d + '_'+ args.model_num +'.pth'
     save_dir = args.save_dir
-    #train(model, device, optimizer, train_loader, eval_loader, args.save_dir, args.epochs, log_file, model_name,patience=25)
+    train(model, device, optimizer, train_loader, eval_loader, args.save_dir, args.epochs, log_file, model_name,patience=25)
     model.load_state_dict(torch.load(os.path.join(args.save_dir, model_name)))
     test(model, device, test_loader)
