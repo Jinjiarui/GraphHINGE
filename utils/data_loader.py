@@ -139,8 +139,12 @@ class Dataloader:
             return self._load_amazon()
         elif self._name == 'movielens':
             return self._load_movielens()
+        elif self._name == 'yelp':
+            return self._load_yelp()
         elif self._name == 'aminer':
             return self._load_aminer()
+        elif self._name == 'dblp':
+            return self._load_dblp()
         elif self._name == 'douban_book':
             return self._load_douban_book()
         elif self._name == 'amazon_book':
@@ -454,6 +458,319 @@ class Dataloader:
             topk_set = MyDataset(user_pth, item_pth, user_metas, item_metas, topk_list[:,:2], topk_list[:,2])
             test_loader= DataLoader(dataset=topk_set, batch_size = self.batch_size, shuffle=False)
         return user_metas, item_metas, train_loader, eval_loader, test_loader, hg.num_nodes('user'), hg.num_nodes('movie'), hg.num_nodes('genre'), hg.num_nodes('genre'), hg.num_nodes('genre')
+
+    def _load_yelp(self):
+        #business: 14284             user: 16239 
+        #category(genre): 511         compliment: 11 
+        #city: 47             
+        #business-genre: 40009     business-city: 14267 
+        #user-business: 198397         user-city: 76875 
+        #user-user: 158590
+
+        if self._data == None:
+            self._data = '../data/Yelp'
+
+        #Load or construct graph
+        if (os.path.exists(os.path.join(self._path, 'yelp_hg.pkl'))):
+            hg_file = open(os.path.join(self._path, 'yelp_hg.pkl'),'rb')
+            hg = pkl.load(hg_file)
+            hg_file.close()
+            print("Graph Loaded.")
+        else:
+            #Construct graph from raw data.
+            # load data of yelp
+            _data_list = ['business_category.dat', 'business_city.dat', 'user_business.dat', 'user_compliment.dat', 'user_user.dat']
+
+            #business_category
+            business_category_src=[]
+            business_category_dst=[]
+            with open(self._data + '/' + _data_list[0]) as fin:
+                for line in fin.readlines():
+                    _line = line.strip().split('\t')
+                    _business, _category= int(_line[0]), int(_line[1])
+                    business_category_src.append(_business)
+                    business_category_dst.append(_category)
+
+            #business_city
+            business_city_src=[]
+            business_city_dst=[]
+            with open(self._data + '/' + _data_list[1]) as fin:
+                for line in fin.readlines():
+                    _line = line.strip().split('\t')
+                    _business, _city= int(_line[0]), int(_line[1])
+                    business_city_src.append(_business)
+                    business_city_dst.append(_city)
+
+            #user_business
+            user_business_src=[]
+            user_business_dst=[]
+            user_item_link=0
+            with open(self._data + '/' + _data_list[2]) as fin:
+                for line in fin.readlines():
+                    _line = line.strip().split('\t')
+                    _user, _business= int(_line[0]), int(_line[1])
+                    user_business_src.append(_user)
+                    user_business_dst.append(_business)
+                    user_item_link+=1
+
+            #user_compliment
+            user_compliment_src=[]
+            user_compliment_dst=[]
+            with open(self._data + '/' + _data_list[3]) as fin:
+                for line in fin.readlines():
+                    _line = line.strip().split('\t')
+                    _user, _compliment= int(_line[0]), int(_line[1])
+                    user_compliment_src.append(_user)
+                    user_compliment_dst.append(_compliment)
+
+            #user_user
+            user_user_src=[]
+            user_user_dst=[]
+            with open(self._data + '/' + _data_list[4]) as fin:
+                for line in fin.readlines():
+                    _line = line.strip().split('\t')
+                    _user1, _user2= int(_line[0]), int(_line[1])
+                    user_user_src.append(_user1)
+                    user_user_dst.append(_user2)
+
+            #build graph
+            hg = dgl.heterograph({
+                ('business', 'bc', 'category') : (business_category_src, business_category_dst),
+                ('category', 'cb', 'business') : (business_category_dst, business_category_src),
+                ('business', 'bci', 'city') : (business_city_src, business_city_dst),
+                ('city', 'cib', 'business') : (business_city_dst, business_city_src),
+                ('user', 'ub', 'business') : (user_business_src, user_business_dst),
+                ('business', 'bu', 'user') : (user_business_dst, user_business_src),
+                ('user', 'uc', 'compliment') : (user_compliment_src, user_compliment_dst),
+                ('compliment', 'cu', 'user') : (user_compliment_dst, user_compliment_src),
+                ('user', 'uu', 'user') : (user_user_src+user_user_dst, user_user_dst+user_user_src)
+            })
+
+            with open(os.path.join(self._path, 'yelp_hg.pkl'), 'wb') as file: 
+                pkl.dump(hg, file)
+            print("Graph constructed.")
+
+        #Split dataset
+        etype_name = 'ub' #predict edge type
+        if (os.path.exists(os.path.join(self._path, 'yelp_train_'+str(self.ratio)+'.pkl'))):
+            train_file = open(self._path+'/'+'yelp_train_'+str(self.ratio)+'.pkl','rb')
+            train_data = pkl.load(train_file)
+            train_file.close()
+            test_file = open(self._path+'/'+'yelp_test_1.pkl','rb')
+            test_data = pkl.load(test_file)
+            test_file.close()
+            eval_file = open(self._path+'/'+'yelp_eval_'+str(self.ratio)+'.pkl','rb')
+            eval_data = pkl.load(eval_file)
+            eval_file.close()
+            print("Train, eval, and test loaded.")
+        else:
+            if self.ratio == 1:
+                train_data, eval_data, test_data = self.split_data(hg, etype_name, user_business_src, user_business_dst,user_item_link,'yelp')
+            else:
+                if (os.path.exists(os.path.join(self._path, 'yelp_train_1.pkl'))) == False:
+                    train_data, eval_data, test_data = self.split_data(hg, etype_name, user_business_src, user_business_dst,user_item_link,'yelp')
+                train_data, eval_data, test_data = self.dataset_sample('yelp')
+            print("Train, eval, and test splited.")
+            
+        #Prepare dataset
+        #Define meta-paths.
+        scale='_'+str(self._num_walks_per_node)+'_'+str(self._walk_length) 
+        user_paths=[['ub'],['ub', 'bu', 'ub'], ['ub', 'bc', 'cb'], ['ub', 'bci', 'cib'], ['ub', 'bc', 'cb']]
+        item_paths=[['bu'],['bu', 'ub', 'bu'], ['bc', 'cb', 'bu'], ['bci', 'cib', 'bu'], ['bc', 'cb', 'bu']]
+        user_metas=['UI','UIUI', 'UIVI', 'UIBI', 'UICI']
+        item_metas=['IU','IUIU', 'IVIU', 'IBIU', 'ICIU']
+        user_pkl='yelp_user'+scale+'.pkl'
+        item_pkl='yelp_item'+scale+'.pkl'
+
+        #Generate paths.
+        if self.saved == True:
+            self.generate_metapath(hg,'user',user_paths, user_metas, self._path, user_pkl)
+            self.generate_metapath(hg,'business',item_paths, item_metas, self._path, item_pkl)
+            print("Paths sampled.")
+
+        if not (os.path.exists(self._path+'/'+user_pkl)):
+            self.generate_metapath(hg,'user',user_paths, user_metas, self._path, user_pkl)
+            self.generate_metapath(hg,'business',item_paths, item_metas, self._path, item_pkl)
+            print("Paths sampled.")
+
+        print("Load paths from:")
+        print(user_pkl)
+        print(item_pkl)
+        user_file = open(self._path+'/'+user_pkl,'rb')
+        user_pth = pkl.load(user_file)
+        user_file.close()
+        item_file = open(self._path+'/'+item_pkl,'rb')
+        item_pth = pkl.load(item_file)
+        item_file.close()
+        train_set = MyDataset(user_pth, item_pth, user_metas, item_metas, train_data[:,:2], train_data[:,2])
+        eval_set = MyDataset(user_pth, item_pth, user_metas, item_metas, eval_data[:,:2], eval_data[:,2])
+        test_set = MyDataset(user_pth, item_pth, user_metas, item_metas, test_data[:,:2], test_data[:,2])
+        train_loader= DataLoader(dataset=train_set, batch_size = self.batch_size, shuffle=True)
+        eval_loader= DataLoader(dataset=eval_set, batch_size = self.batch_size, shuffle=True)
+        test_loader= DataLoader(dataset=test_set, batch_size = self.batch_size, shuffle=True)
+
+        #Prepare topk test set.
+        if self.is_topk == True:
+            if (os.path.exists(os.path.join(self._path, 'yelp_topk_'+str(self.list_length)+'_.pkl'))):
+                topk_file = open(self._path+'/'+'yelp_topk_'+str(self.list_length)+'_.pkl','rb')
+                topk_list = pkl.load(topk_file)
+                topk_file.close()
+                print("Top K loaded.")
+            else:
+                topk_list = self.generate_topklist('yelp',test_data, list_length = self.list_length)
+                print("Top K generated.")
+            topk_set = MyDataset(user_pth, item_pth, user_metas, item_metas, topk_list[:,:2], topk_list[:,2])
+            test_loader= DataLoader(dataset=topk_set, batch_size = self.batch_size, shuffle=False)
+        return user_metas, item_metas, train_loader, eval_loader, test_loader, hg.num_nodes('user'), hg.num_nodes('business'), hg.num_nodes('category'), hg.num_nodes('city'), hg.num_nodes('category')
+        
+
+    def _load_dblp(self):
+
+        if self._data == None:
+            self._data = '../data/DBLP'
+
+        #Load or construct graph
+        if (os.path.exists(os.path.join(self._path, 'dblp_hg.pkl'))):
+            hg_file = open(os.path.join(self._path, 'dblp_hg.pkl'),'rb')
+            hg = pkl.load(hg_file)
+            hg_file.close()
+            print("Graph Loaded.")
+        else:
+            #Construct graph from raw data.
+            # load data of dblp
+            _data_list = ['author_label.dat', 'paper_author.dat', 'paper_conference.dat', 'paper_type.dat']
+
+            #author_label
+            author_label_src=[]
+            author_label_dst=[]
+            with open(self._data + '/' + _data_list[0]) as fin:
+                for line in fin.readlines():
+                    _line = line.strip().split('\t')
+                    _author, _label= int(_line[0]), int(_line[1])
+                    author_label_src.append(_author)
+                    author_label_dst.append(_label)
+
+            #paper_author
+            paper_author_src=[]
+            paper_author_dst=[]
+            user_item_link=0
+            with open(self._data + '/' + _data_list[1]) as fin:
+                for line in fin.readlines():
+                    _line = line.strip().split('\t')
+                    _paper, _author= int(_line[0]), int(_line[1])
+                    paper_author_src.append(_paper)
+                    paper_author_dst.append(_author)
+                    user_item_link+=1
+
+            #paper_conference
+            paper_conference_src=[]
+            paper_conference_dst=[]
+            with open(self._data + '/' + _data_list[2]) as fin:
+                for line in fin.readlines():
+                    _line = line.strip().split('\t')
+                    _paper, _conference= int(_line[0]), int(_line[1])
+                    paper_conference_src.append(_paper)
+                    paper_conference_dst.append(_conference)
+
+            #paper_type
+            paper_type_src=[]
+            paper_type_dst=[]
+            with open(self._data + '/' + _data_list[3]) as fin:
+                for line in fin.readlines():
+                    _line = line.strip().split('\t')
+                    _paper, _type= int(_line[0]), int(_line[1])
+                    paper_type_src.append(_paper)
+                    paper_type_dst.append(_type)
+
+
+            #build graph
+            hg = dgl.heterograph({
+                ('author', 'al', 'label') : (author_label_src, author_label_dst),
+                ('label', 'la', 'author') : (author_label_dst, author_label_src),
+                ('paper', 'pa', 'author') : (paper_author_src, paper_author_dst),
+                ('author', 'ap', 'paper') : (paper_author_dst, paper_author_src),
+                ('paper', 'pc', 'conference') : (paper_conference_src, paper_conference_dst),
+                ('conference', 'cp', 'paper') : (paper_conference_dst, paper_conference_src),
+                ('paper', 'pt', 'type') : (paper_type_src, paper_type_dst),
+                ('type', 'tp', 'paper') : (paper_type_dst, paper_type_src)
+            })
+
+            with open(os.path.join(self._path, 'dblp_hg.pkl'), 'wb') as file: 
+                pkl.dump(hg, file)
+            print("Graph constructed.")
+
+        #Split dataset
+        etype_name = 'ap' #predict edge type
+        if (os.path.exists(os.path.join(self._path, 'dblp_train_'+str(self.ratio)+'.pkl'))):
+            train_file = open(self._path+'/'+'dblp_train_'+str(self.ratio)+'.pkl','rb')
+            train_data = pkl.load(train_file)
+            train_file.close()
+            test_file = open(self._path+'/'+'dblp_test_1.pkl','rb')
+            test_data = pkl.load(test_file)
+            test_file.close()
+            eval_file = open(self._path+'/'+'dblp_eval_'+str(self.ratio)+'.pkl','rb')
+            eval_data = pkl.load(eval_file)
+            eval_file.close()
+            print("Train, eval, and test loaded.")
+        else:
+            if self.ratio == 1:
+                train_data, eval_data, test_data = self.split_data(hg, etype_name, paper_author_dst, paper_author_src,user_item_link,'dblp')
+            else:
+                if (os.path.exists(os.path.join(self._path, 'dblp_train_1.pkl'))) == False:
+                    train_data, eval_data, test_data = self.split_data(hg, etype_name, paper_author_dst, paper_author_src,user_item_link,'dblp')
+                train_data, eval_data, test_data = self.dataset_sample('dblp')
+            print("Train, eval, and test splited.")
+            
+        #Prepare dataset
+        #Define meta-paths.
+        scale='_'+str(self._num_walks_per_node)+'_'+str(self._walk_length) 
+        user_paths=[['ap'],['ap', 'pa', 'ap'], ['ap', 'pc', 'cp'], ['ap', 'pt', 'tp'], ['ap', 'pc', 'cp']]
+        item_paths=[['pa'],['pa', 'ap', 'pa'], ['pc', 'cp', 'pa'], ['pt', 'tp', 'pa'], ['pc', 'cp', 'pa']]
+        user_metas=['UI','UIUI', 'UIVI', 'UIBI', 'UICI']
+        item_metas=['IU','IUIU', 'IVIU', 'IBIU', 'ICIU']
+        user_pkl='dblp_user'+scale+'.pkl'
+        item_pkl='dblp_item'+scale+'.pkl'
+
+        #Generate paths.
+        if self.saved == True:
+            self.generate_metapath(hg,'author',user_paths, user_metas, self._path, user_pkl)
+            self.generate_metapath(hg,'paper',item_paths, item_metas, self._path, item_pkl)
+            print("Paths sampled.")
+
+        if not (os.path.exists(self._path+'/'+user_pkl)):
+            self.generate_metapath(hg,'author',user_paths, user_metas, self._path, user_pkl)
+            self.generate_metapath(hg,'paper',item_paths, item_metas, self._path, item_pkl)
+            print("Paths sampled.")
+
+        print("Load paths from:")
+        print(user_pkl)
+        print(item_pkl)
+        user_file = open(self._path+'/'+user_pkl,'rb')
+        user_pth = pkl.load(user_file)
+        user_file.close()
+        item_file = open(self._path+'/'+item_pkl,'rb')
+        item_pth = pkl.load(item_file)
+        item_file.close()
+        train_set = MyDataset(user_pth, item_pth, user_metas, item_metas, train_data[:,:2], train_data[:,2])
+        eval_set = MyDataset(user_pth, item_pth, user_metas, item_metas, eval_data[:,:2], eval_data[:,2])
+        test_set = MyDataset(user_pth, item_pth, user_metas, item_metas, test_data[:,:2], test_data[:,2])
+        train_loader= DataLoader(dataset=train_set, batch_size = self.batch_size, shuffle=True)
+        eval_loader= DataLoader(dataset=eval_set, batch_size = self.batch_size, shuffle=True)
+        test_loader= DataLoader(dataset=test_set, batch_size = self.batch_size, shuffle=True)
+
+        #Prepare topk test set.
+        if self.is_topk == True:
+            if (os.path.exists(os.path.join(self._path, 'dblp_topk_'+str(self.list_length)+'_.pkl'))):
+                topk_file = open(self._path+'/'+'dblp_topk_'+str(self.list_length)+'_.pkl','rb')
+                topk_list = pkl.load(topk_file)
+                topk_file.close()
+                print("Top K loaded.")
+            else:
+                topk_list = self.generate_topklist('dblp',test_data, list_length = self.list_length)
+                print("Top K generated.")
+            topk_set = MyDataset(user_pth, item_pth, user_metas, item_metas, topk_list[:,:2], topk_list[:,2])
+            test_loader= DataLoader(dataset=topk_set, batch_size = self.batch_size, shuffle=False)
+        return user_metas, item_metas, train_loader, eval_loader, test_loader, hg.num_nodes('author'), hg.num_nodes('paper'), hg.num_nodes('conference'), hg.num_nodes('type'), hg.num_nodes('conference')
 
     def _load_douban_book(self):
         # User-Book 13024 22347 792062
