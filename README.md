@@ -13,7 +13,9 @@ Jiarui Jin, Jiarui Qin, Yuchen Fang, Kounianhua Du, Weinan Zhang, Yong Yu, Zheng
 [KDD 2020 Oral](https://arxiv.org/pdf/2007.00216.pdf)
 
 ### Prerequisites
-- Python 3
+- Python 3.6
+- Pytorch 1.8.0
+- Dgl 0.6.0
 
 ### References
 If you find this work helpful in your research, please consider citing the following paper. The bibtex are listed below:
