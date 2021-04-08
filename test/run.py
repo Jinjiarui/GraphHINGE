@@ -9,7 +9,7 @@ from utils import data_loader,utils
 import argparse
 import random
 import pickle as pkl
-import tqdm
+from tqdm import tqdm
 import datetime
 from time import time
 from algo import GraphHINGE_FFT,GraphHINGE_Conv,GraphHINGE_Cross,GraphHINGE_CrossConv,GraphHINGE_ALL
@@ -27,7 +27,6 @@ def train(model, device, optimizer, train_loader, eval_loader, save_dir, epochs,
     eval_writer = SummaryWriter(log_dir=eval_dir)
     best_val_acc = 0.0
     for epoch in range(epochs):
-        print("-------Epoch {}----------".format(epoch+1))
         log_file.write("Epoch {} >>".format(epoch+1))
         
         #train
@@ -37,7 +36,9 @@ def train(model, device, optimizer, train_loader, eval_loader, save_dir, epochs,
         train_acc = []
         train_logloss = []
         train_f1 = []
-        for i, data in enumerate(train_loader):
+        pbar = tqdm(train_loader)
+        for i, data in enumerate(pbar):
+            pbar.set_description(f'Train Epoch: {epoch + 1}')
             UI, IU, UIUI, IUIU, UIAI1, IAIU1, UIAI2, IAIU2, UIAI3, IAIU3, labels = data
             optimizer.zero_grad()
             pred = model(UI.to(device), IU.to(device),\
@@ -74,8 +75,9 @@ def train(model, device, optimizer, train_loader, eval_loader, save_dir, epochs,
             
             del UI, IU, UIUI, IUIU, UIAI1, IAIU1, UIAI2, IAIU2, UIAI3, IAIU3, labels, pred
             gc.collect()
-            with torch.cuda.device(device):
-                torch.cuda.empty_cache()
+            if device.type != 'cpu':
+                with torch.cuda.device(device):
+                    torch.cuda.empty_cache()
             
 
         train_loss = np.mean(train_loss) 
@@ -96,7 +98,9 @@ def train(model, device, optimizer, train_loader, eval_loader, save_dir, epochs,
         with torch.no_grad():
             last_loss = 0.0
             cnt = 0
-            for i, data in enumerate(eval_loader):
+            pbar = tqdm(eval_loader)
+            for i, data in enumerate(pbar):
+                pbar.set_description(f'Eval Epoch: {epoch + 1}')
                 UI, IU, UIUI, IUIU, UIAI1, IAIU1, UIAI2, IAIU2, UIAI3, IAIU3, labels = data
                 
                 pred = model(UI.to(device), IU.to(device),\
@@ -118,8 +122,9 @@ def train(model, device, optimizer, train_loader, eval_loader, save_dir, epochs,
 
                 del UI,IU, UIUI, IUIU, UIAI1, IAIU1, UIAI2, IAIU2, UIAI3, IAIU3, labels, pred
                 gc.collect()
-                with torch.cuda.device(device):
-                    torch.cuda.empty_cache()
+                if device.type != 'cpu':
+                    with torch.cuda.device(device):
+                        torch.cuda.empty_cache()
                 
 
             eval_loss = np.mean(eval_loss)
@@ -159,7 +164,7 @@ def test(model, device, test_loader):
     test_logloss = []
     test_f1 = []
     with torch.no_grad():
-        for i, data in enumerate(test_loader):
+        for i, data in enumerate(tqdm(test_loader)):
             UI, IU, UIUI, IUIU, UIAI1, IAIU1, UIAI2, IAIU2, UIAI3, IAIU3, labels = data
             pred = model(UI.to(device), IU.to(device),\
             UIUI.to(device), IUIU.to(device), \
@@ -185,8 +190,9 @@ def test(model, device, test_loader):
             del UI, IU, UIUI, IUIU, UIAI1, IAIU1, UIAI2, IAIU2, UIAI3, IAIU3, labels, pred
             gc.collect()
             
-            with torch.cuda.device(device):
-                torch.cuda.empty_cache()
+            if device.type != 'cpu':
+                with torch.cuda.device(device):
+                    torch.cuda.empty_cache()
 
         test_loss = np.mean(test_loss)
         test_auc = np.mean(test_auc)
@@ -198,7 +204,7 @@ def test(model, device, test_loader):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Parameters.')
-    parser.add_argument('-cuda', type=int, default=0 ,help='Cuda number.')
+    parser.add_argument('-cuda', type=str, default='cpu' ,help='Cuda number.')
     parser.add_argument('-hidden', type=int, default=128, help='Hidden Units.')
     parser.add_argument('-heads', type=int, default=3, help='Attention heads.')
     parser.add_argument('-lr', type=float, default=0.001, help='Learning rate.')
@@ -222,7 +228,7 @@ if __name__ == "__main__":
     parser.add_argument('-ratio', type=float, default=1, help='Sample ratio.')
 
     args = parser.parse_args() 
-    device = torch.device("cuda:" + str(args.cuda))
+    device = torch.device(args.cuda)
     user_metas, item_metas, train_loader, eval_loader, test_loader, user_num, item_num, attr1_num, attr2_num, attr3_num = \
     data_loader.Dataloader(args.p, args.d, args.o, args.s, args.n, args.w, args.b,ratio=args.ratio).load_data()
     print('Data Loaded!')
@@ -262,6 +268,6 @@ if __name__ == "__main__":
     log_file = open(os.path.join(args.save_dir, log_name), "w+")
     model_name = args.model + '_'+ args.d + '_'+ args.model_num +'.pth'
     save_dir = args.save_dir
-    #train(model, device, optimizer, train_loader, eval_loader, args.save_dir, args.epochs, log_file, model_name,patience=3)
+    train(model, device, optimizer, train_loader, eval_loader, args.save_dir, args.epochs, log_file, model_name,patience=3)
     #model.load_state_dict(torch.load(os.path.join(args.save_dir, model_name)))
     test(model, device, test_loader)

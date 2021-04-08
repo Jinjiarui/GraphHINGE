@@ -26,11 +26,12 @@ class MyDataset(Dataset):
         self.IAIU2 = item_pth[item_metas[3]]
         self.UIAI3 = user_pth[user_metas[4]]
         self.IAIU3 = item_pth[item_metas[4]]
-        self.x_data = x_data
+        self.x_data = x_data # list of (source, target)
         self.y_data = torch.Tensor(y_data).unsqueeze(1)
         self.len = x_data.shape[0]
     
     def __getitem__(self, index):
+        # If a random walk stops in advance, DGL pads the trace with -1 to have the same length.
         return self.UI[self.x_data[index][0]]+1, self.IU[self.x_data[index][1]]+1, \
         self.UIUI[self.x_data[index][0]]+1, self.IUIU[self.x_data[index][1]]+1, \
         self.UIAI1[self.x_data[index][0]]+1, self.IAIU1[self.x_data[index][1]]+1, \
@@ -52,9 +53,27 @@ class Dataloader:
         self.batch_size = batch_size
         self.is_topk = is_topk
         self.list_length = list_length
-        self.ratio = ratio
+        self.ratio = ratio # [0-1] only sample ratio * 100% data to train/val/test 
 
     def generate_metapath(self,hg,head,meta_paths,path_names,path,name):
+        """
+            Params
+            -----
+            hg: Heterogeneous Graph
+            head: source NODE type
+            meta_paths: specified as a list of EDGE types
+            Result
+            -----
+            Save dict: {
+                "path_name": {
+                    "source_node_id": List of Path(Traces), Type: Tensor, Shape: (_num_walks_per_node, path_len),
+                    ...
+                },
+                ...
+            }
+
+            path_len = len(meta_path * self._walk_length)+1)
+        """
         dict={}
         for meta_path, path_name in zip(meta_paths, path_names):
             dict[path_name]={}
@@ -66,6 +85,12 @@ class Dataloader:
             pkl.dump(dict, file)
 
     def split_data(self, hg, etype_name, user_item_src, user_item_dst,user_item_link, data_name):
+        '''
+            Positive : Negative = 1 : 1
+            Train : Eval : Test = 6 : 2 : 2
+            ------
+            Return Data: List of (source, target, label)
+        '''
         pos_label=[1]*user_item_link
         pos_data=list(zip(user_item_src,user_item_dst,pos_label))
         user_item_adj = np.array(hg.adj(etype=etype_name).to_dense())
@@ -94,6 +119,9 @@ class Dataloader:
         return train_data, eval_data, test_data
     
     def dataset_sample(self,data_name):
+        '''
+            只sample 部分样本， 比例为 self.ratio([0, 1])
+        '''
         train_file = open(self._path+'/'+data_name+'_train_1.pkl','rb')
         train_data = pkl.load(train_file)
         train_file.close()
@@ -118,6 +146,9 @@ class Dataloader:
         return train_data,eval_data,test_data
 
     def generate_topklist(self, data_name, test_data, list_length):
+        '''
+            每个 user 最多存 list_length 个 样例
+        '''
         users=test_data[:,0]
         user_idxs=np.unique(users)
         topk_list = []
