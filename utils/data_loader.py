@@ -151,6 +151,8 @@ class Dataloader:
             return self._load_amazon_book()
         elif self._name == 'movielens_20m':
             return self._load_movielens_20m()
+        elif self._name == 'book_cross':
+            return self._load_book_cross()
         else:
             raise NotImplementedError
 
@@ -1148,7 +1150,7 @@ class Dataloader:
                 ('item', 'iu', 'user') : (user_item_dst, user_item_src),
                 ('item', 'ik', 'knowledge') : (item_knowledge_src, item_knowledge_dst),
                 ('knowledge', 'ki', 'item') : (item_knowledge_dst, item_knowledge_src)})
-            user_sample = random.sample(range(0, hg.num_nodes('user')), hg.num_nodes('user')-20000)
+            user_sample = random.sample(range(0, hg.num_nodes('user')), hg.num_nodes('user')-5000)
             hg = dgl.remove_nodes(hg, user_sample, ntype='user')
             adj_ui = np.array(hg.adj(etype='ui').to_dense())
             aux = adj_ui.sum(0)
@@ -1248,6 +1250,158 @@ class Dataloader:
                 print("Top K loaded.")
             else:
                 topk_list = self.generate_topklist('movielens_20m',test_data, list_length = self.list_length)
+                print("Top K generated.")
+            topk_set = MyDataset(user_pth, item_pth, user_metas, item_metas, topk_list[:,:2], topk_list[:,2])
+            test_loader= DataLoader(dataset=topk_set, batch_size = self.batch_size, shuffle=False)
+
+        return user_metas, item_metas, train_loader, eval_loader, test_loader, hg.num_nodes('user'), hg.num_nodes('item'), hg.num_nodes('knowledge'), hg.num_nodes('knowledge'), hg.num_nodes('knowledge')
+
+    def _load_book_cross(self):
+        if self._data == None:
+            self._data = '../data/pickled_data'
+
+        if (os.path.exists(os.path.join(self._path, 'book_cross_sampled.pkl'))):
+            hg_file = open(os.path.join(self._path, 'book_cross_sampled.pkl'),'rb')
+            hg = pkl.load(hg_file)
+            hg_file.close()
+            print("Sampled Graph loaded!")
+            print("User: %d" %(hg.num_nodes('user')))
+            print("Item: %d" %(hg.num_nodes('item')))
+            print("Knowledge: %d" %(hg.num_nodes('knowledge')))
+            print("User-Item: %d" %(hg.num_edges('ui')))
+            print("Item-Knowledge: %d" %(hg.num_edges('ik')))
+        else:
+            # dict_keys(['train_data', 'eval_data', 'test_data', 'adj', 'adj_relational', 'kg_dict'])
+            _data_book_cross = pkl.load(open(self._data + '/' + 'bc.pkl', 'rb'))
+            train_data = _data_book_cross['train_data']
+            test_data = _data_book_cross['test_data']
+            eval_data = _data_book_cross['eval_data']
+            kg_dict = _data_book_cross['kg_dict']
+
+            full_data = np.concatenate((train_data,test_data,eval_data), 0)
+
+            #user_item
+            pos_data = full_data[full_data[:,2] == 1]
+            user_item_src = pos_data[:,0].tolist()
+            user_item_dst = pos_data[:,1].tolist()
+
+            #item_knowledge
+            item_knowledge_src = []
+            item_knowledge_dst = []
+            know_num = 0
+            item_num1 = max(kg_dict.keys())
+            for kg_item, kg_list in zip(kg_dict.keys(), kg_dict.values()):
+                for kg_knowledge in kg_list:
+                    item_knowledge_src.append(kg_item)
+                    item_knowledge_dst.append(kg_knowledge)
+                    know_num =max(know_num,kg_knowledge)
+
+            #build graph
+            hg = dgl.heterograph({
+                ('user', 'ui', 'item') : (user_item_src, user_item_dst),
+                ('item', 'iu', 'user') : (user_item_dst, user_item_src),
+                ('item', 'ik', 'knowledge') : (item_knowledge_src, item_knowledge_dst),
+                ('knowledge', 'ki', 'item') : (item_knowledge_dst, item_knowledge_src)})
+            user_sample = random.sample(range(0, hg.num_nodes('user')), hg.num_nodes('user')-10000)
+            hg = dgl.remove_nodes(hg, user_sample, ntype='user')
+            adj_ui = np.array(hg.adj(etype='ui').to_dense())
+            aux = adj_ui.sum(0)
+            item_removed = np.where(aux==0)
+            item_removed = torch.Tensor(item_removed).squeeze(1).squeeze(0).long()
+            hg = dgl.remove_nodes(hg, item_removed, ntype='item')
+            adj_ik = np.array(hg.adj(etype='ik').to_dense())
+            aux = adj_ik.sum(0)
+            know_removed = np.where(aux==0)
+            know_removed = torch.Tensor(know_removed).squeeze(1).squeeze(0).long()
+            hg = dgl.remove_nodes(hg, know_removed, ntype='knowledge')
+            adj_ui = np.array(hg.adj(etype='ui').to_dense())
+            aux = adj_ui.sum(1)
+            user_removed = np.where(aux==0)
+            user_removed = torch.Tensor(user_removed).squeeze(1).squeeze(0).long()
+            hg = dgl.remove_nodes(hg, user_removed, ntype='user')
+
+            with open(os.path.join(self._path, 'book_cross_sampled.pkl'), 'wb') as file: 
+                pkl.dump(hg, file)
+            print("Sample Graph Finished.")
+            print("User: %d" %(hg.num_nodes('user')))
+            print("Item: %d" %(hg.num_nodes('item')))
+            print("Knowledge: %d" %(hg.num_nodes('knowledge')))
+            print("User-Item: %d" %(hg.num_edges('ui')))
+            print("Item-Knowledge: %d" %(hg.num_edges('ik')))
+
+        # Split data.
+        z=hg.edges(etype= ('user', 'ui', 'item'))
+        etype_name = 'ui'
+        user_item_src = z[0].numpy().tolist()
+        user_item_dst = z[1].numpy().tolist()
+        user_item_link = hg.num_edges('ui')
+        if (os.path.exists(os.path.join(self._path, 'book_cross_train_'+str(self.ratio)+'.pkl'))):
+            train_file = open(self._path+'/'+'book_cross_train_'+str(self.ratio)+'.pkl','rb')
+            train_data = pkl.load(train_file)
+            train_file.close()
+            test_file = open(self._path+'/'+'book_cross_test_1.pkl','rb')
+            test_data = pkl.load(test_file)
+            test_file.close()
+            eval_file = open(self._path+'/'+'book_cross_eval_'+str(self.ratio)+'.pkl','rb')
+            eval_data = pkl.load(eval_file)
+            eval_file.close()
+            print("Train, eval, and test loaded.")
+        else:
+            if self.ratio == 1:
+                train_data, eval_data, test_data = self.split_data(hg, etype_name, user_item_src, user_item_dst,user_item_link, 'book_cross')
+            else:
+                if (os.path.exists(os.path.join(self._path, 'book_cross_train_1.pkl'))) == False:
+                    train_data, eval_data, test_data = self.split_data(hg, etype_name, user_item_src, user_item_dst,user_item_link, 'book_cross')
+                train_data, eval_data, test_data = self.dataset_sample('book_cross')
+            print("Train, eval, and test splited.")
+
+        #Prepare dataset
+        #Define meta-paths.
+        #sample path
+        scale='_'+str(self._num_walks_per_node)+'_'+str(self._walk_length) 
+        user_paths=[['ui'],['ui', 'iu', 'ui'], ['ui', 'ik', 'ki'], ['ui', 'ik', 'ki'], ['ui', 'ik', 'ki']]
+        item_paths=[['iu'],['iu', 'ui', 'iu'], ['ik', 'ki', 'iu'], ['ik', 'ki', 'iu'], ['ik', 'ki', 'iu']]
+        user_metas=['UI','UIUI', 'UIVI', 'UIBI', 'UICI']
+        item_metas=['IU','IUIU', 'IVIU', 'IBIU', 'ICIU']
+        user_pkl='book_cross_user'+scale+'.pkl'
+        item_pkl='book_cross_item'+scale+'.pkl'
+
+        #Generate paths.
+        if self.saved == True:
+            self.generate_metapath(hg,'user',user_paths, user_metas, self._path, user_pkl)
+            self.generate_metapath(hg,'item',item_paths, item_metas, self._path, item_pkl)
+            print("Paths sampled.")
+
+        if not (os.path.exists(self._path+'/'+user_pkl)):
+            self.generate_metapath(hg,'user',user_paths, user_metas, self._path, user_pkl)
+            self.generate_metapath(hg,'item',item_paths, item_metas, self._path, item_pkl)
+            print("Paths sampled.")
+        
+        print("Load paths from:")
+        print(user_pkl)
+        print(item_pkl)
+        user_file = open(self._path+'/'+user_pkl,'rb')
+        user_pth = pkl.load(user_file)
+        user_file.close()
+        item_file = open(self._path+'/'+item_pkl,'rb')
+        item_pth = pkl.load(item_file)
+        item_file.close()
+        train_set = MyDataset(user_pth, item_pth, user_metas, item_metas, train_data[:,:2], train_data[:,2])
+        eval_set = MyDataset(user_pth, item_pth, user_metas, item_metas, eval_data[:,:2], eval_data[:,2])
+        test_set = MyDataset(user_pth, item_pth, user_metas, item_metas, test_data[:,:2], test_data[:,2])
+        train_loader= DataLoader(dataset=train_set, batch_size = self.batch_size, shuffle=True)
+        eval_loader= DataLoader(dataset=eval_set, batch_size = self.batch_size, shuffle=True)
+        test_loader= DataLoader(dataset=test_set, batch_size = self.batch_size, shuffle=True)
+
+        #Prepare topk test set.
+        if self.is_topk == True:
+            if (os.path.exists(os.path.join(self._path, 'book_cross_topk_'+str(self.list_length)+'_.pkl'))):
+                topk_file = open(self._path+'/'+'book_cross_topk_'+str(self.list_length)+'_.pkl','rb')
+                topk_list = pkl.load(topk_file)
+                topk_file.close()
+                print("Top K loaded.")
+            else:
+                topk_list = self.generate_topklist('book_cross',test_data, list_length = self.list_length)
                 print("Top K generated.")
             topk_set = MyDataset(user_pth, item_pth, user_metas, item_metas, topk_list[:,:2], topk_list[:,2])
             test_loader= DataLoader(dataset=topk_set, batch_size = self.batch_size, shuffle=False)
