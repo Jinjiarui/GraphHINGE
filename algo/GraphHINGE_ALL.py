@@ -123,8 +123,8 @@ class GraphHINGE(nn.Module):
         self.attr1_emb = nn.Embedding(attr1_num+1, in_size, padding_idx=0)
         self.attr2_emb = nn.Embedding(attr2_num+1, in_size, padding_idx=0)
         self.attr3_emb = nn.Embedding(attr3_num+1, in_size, padding_idx=0)
-        self.Interaction0 = Interaction(1,1)
-        self.Interaction = Interaction(3,3)
+        #self.Interaction0 = Interaction(1,1)
+        #self.Interaction = Interaction(3,3)
         self.NodeAttention = nn.ModuleList()
         for i in range(0,5):
             self.NodeAttention.append(NodeAttention(in_size, hidden_size, num_heads, temp1))
@@ -135,6 +135,20 @@ class GraphHINGE(nn.Module):
             nn.Linear(out_size, 1)
         )
         
+    def interaction(self, s, t):
+        #s,t: B*L*E*N
+        length = s.shape[-1] + t.shape[-1]
+        fs = torch.fft.fft(s, n=length)
+        ft = torch.fft.fft(t, n=length)
+        H = []
+        for i in range(0, s.shape[1]):
+            rfs = torch.roll(fs, i, 1)
+            h = rfs*ft
+            h = torch.fft.ifft(h)
+            H.append(h.permute(0,1,3,2).float()) #B*L*(Is+It-1)*E
+        h = torch.cat(H, 1)
+        return h
+
     def forward(self, UI, IU, UIUI, IUIU, UIAI1, IAIU1, UIAI2, IAIU2, UIAI3, IAIU3):
         user_idx = UI[:,0,0] #B
         item_idx = IU[:,0,0] #B
@@ -157,11 +171,13 @@ class GraphHINGE(nn.Module):
         item_features = [iuiu,iaiu1,iaiu2,iaiu3]
         H=[]
 
-        h=self.Interaction0(ui,iu)
+        #h=self.Interaction0(ui,iu)
+        h=self.interaction(ui, iu)
         h=self.NodeAttention[0](h)
         H.append(h)
         for i in range(0,len(user_features)):
-            h = self.Interaction(user_features[i], item_features[i])
+            #h = self.Interaction(user_features[i], item_features[i])
+            h = self.interaction(user_features[i], item_features[i])
             h = self.NodeAttention[i+1](h)
             H.append(h)
         
