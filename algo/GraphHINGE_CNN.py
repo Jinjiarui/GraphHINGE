@@ -124,6 +124,7 @@ class GraphHINGE_CNN(nn.Module):
         self.final_linear = nn.Sequential(
             nn.Linear(4*hidden_size, hidden_size),
             nn.ReLU(),
+            nn.Dropout(p=0.1),
             nn.Linear(hidden_size, 1)
         )
         

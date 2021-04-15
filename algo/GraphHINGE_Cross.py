@@ -92,6 +92,7 @@ class GraphHINGE(nn.Module):
         self.final_linear = nn.Sequential(
             nn.Linear(3*hidden_size, out_size),
             nn.ReLU(),
+            nn.Dropout(p=0.1),
             nn.Linear(out_size, 1)
         )
     

@@ -132,6 +132,7 @@ class GraphHINGE(nn.Module):
         self.final_linear = nn.Sequential(
             nn.Linear(3*hidden_size, out_size),
             nn.ReLU(),
+            nn.Dropout(p=0.1),
             nn.Linear(out_size, 1)
         )
         
@@ -148,7 +149,7 @@ class GraphHINGE(nn.Module):
             H.append(h.permute(0,1,3,2).float()) #B*L*(Is+It-1)*E
         h = torch.cat(H, 1)
         return h
-
+        
     def forward(self, UI, IU, UIUI, IUIU, UIAI1, IAIU1, UIAI2, IAIU2, UIAI3, IAIU3):
         user_idx = UI[:,0,0] #B
         item_idx = IU[:,0,0] #B
