@@ -12,7 +12,7 @@ import pickle as pkl
 import tqdm
 import datetime
 from time import time
-from algo import GraphHINGE_FFT,GraphHINGE_Conv,GraphHINGE_Cross,GraphHINGE_CrossConv,GraphHINGE_ALL
+from algo import GraphHINGE_FFT,GraphHINGE_Conv,GraphHINGE_Cross,GraphHINGE_CrossConv,GraphHINGE_ALL, GraphHINGE_ConvALL
 #from tensorboardX import SummaryWriter
 import numpy as np
 
@@ -228,6 +228,10 @@ if __name__ == "__main__":
             ).to(device)
     elif args.model == 'GraphHINGE_ALL':
         model = GraphHINGE_ALL.GraphHINGE(
+            user_num, item_num, attr1_num, attr2_num, attr3_num, args.hidden, args.hidden, args.hidden, args.heads, args.temp1, args.temp2
+            ).to(device)
+    elif args.model == 'GraphHINGE_ConvALL':
+        model = GraphHINGE_ConvALL.GraphHINGE(
             user_num, item_num, attr1_num, attr2_num, attr3_num, args.hidden, args.hidden, args.hidden, args.heads, args.temp1, args.temp2
             ).to(device)
     else:
