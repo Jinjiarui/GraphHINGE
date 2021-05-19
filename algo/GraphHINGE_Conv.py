@@ -87,7 +87,7 @@ class GraphHINGE(nn.Module):
         self.NodeAttention = nn.ModuleList()
         for i in range(0,5):
             self.NodeAttention.append(NodeAttention(in_size, hidden_size, num_heads, temp1))
-        self.PathAttention = PathAttention(in_size, hidden_size, temp2)
+        self.PathAttention = PathAttention(hidden_size, hidden_size, temp2)
         self.final_linear = nn.Sequential(
             nn.Linear(3*hidden_size, out_size),
             nn.ReLU(),
