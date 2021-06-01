@@ -13,38 +13,6 @@ import random
 import pickle as pkl
 import tqdm
 
-class Interaction(nn.Module):
-    def __init__(self, s_padding, t_padding):
-        super(Interaction, self).__init__()
-        self.ms = torch.nn.ZeroPad2d((0,0,0,s_padding))
-        self.mt = torch.nn.ZeroPad2d((0,0,0,t_padding))
-       
-    def forward(self, s, t):
-        #s,t: B*L*E*N
-        s_imaginary=s*0
-        t_imaginary=t*0
-        fs=torch.stack((s,s_imaginary),4)
-        ft=torch.stack((t,t_imaginary),4)
-        ft=self.mt(ft)
-        fs=self.ms(fs)
-        fs=torch.Tensor.fft(fs,1)
-        ft=torch.Tensor.fft(ft,1)
-        H=[]
-        fft=ft
-        for i in range(0,s.shape[1]):
-            ffs=torch.roll(fs, i, 1)
-            rr=torch.Tensor.mul(ffs[:,:,:,:,0],fft[:,:,:,:,0])
-            ii=torch.Tensor.mul(ffs[:,:,:,:,1],fft[:,:,:,:,1])
-            ri=torch.Tensor.mul(ffs[:,:,:,:,0],fft[:,:,:,:,1])
-            ir=torch.Tensor.mul(ffs[:,:,:,:,1],fft[:,:,:,:,0])
-            h=torch.stack((rr-ii,ri+ir),axis=4) #B*L*E*N*2
-            H.append(h)
-        H = torch.cat(H,1)
-        H=torch.Tensor.ifft(H,1)
-        H=H[:,:,:,:,0]
-        H=H.permute(0,1,3,2) #B*L*(Is+It-1)*E
-        return H
-
 class NodeAttention(nn.Module):
     def __init__(self, in_size, out_size=128, atn_heads = 3, temp = 0.2):
         super(NodeAttention, self).__init__()
@@ -138,7 +106,7 @@ class GraphHINGE(nn.Module):
         
     def interaction(self, s, t):
         #s,t: B*L*E*N
-        length = s.shape[-1] + t.shape[-1]
+        length = s.shape[-1] + t.shape[-1] - 1
         fs = torch.fft.fft(s, n=length)
         ft = torch.fft.fft(t, n=length)
         H = []
