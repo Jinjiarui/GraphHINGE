@@ -98,7 +98,7 @@ class GraphHINGE(nn.Module):
     
     def interaction(self, s, t):
         #s,t: B*L*E*N
-        length = s.shape[-1] + t.shape[-1]
+        length = s.shape[-1] + t.shape[-1] - 1
         s = torch.fft.fft(s, n=length)
         t = torch.fft.fft(t, n=length)
         h = s*t
