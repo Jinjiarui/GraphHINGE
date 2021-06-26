@@ -15,7 +15,7 @@ Jiarui Jin, Jiarui Qin, Yuchen Fang, Kounianhua Du, Weinan Zhang, Yong Yu, Zheng
 and its extended work:
 > Learning Interaction Models of Structured Neighborhood on Heterogeneous Information Network </br>
 Jiarui Jin, Kounianhua Du, Weinan Zhang, Jiarui Qin, Yuchen Fang, Yong Yu, Zheng Zhang, Alexander J. Smola. </br>
-[arXiv](https://arxiv.org/pdf/2011.12683.pdf)
+[TOIS](https://arxiv.org/pdf/2011.12683.pdf)
 
 ### Prerequisites
 - Python 3.6
