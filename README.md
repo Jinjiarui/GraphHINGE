@@ -10,7 +10,7 @@ This is a `pytorch` implementation of GraphHINGE model. This is the experiment c
 
 > An Efficient Neighborhood-based Interaction Model for Recommendation on Heterogeneous Graph </br>
 Jiarui Jin, Jiarui Qin, Yuchen Fang, Kounianhua Du, Weinan Zhang, Yong Yu, Zheng Zhang, Alexander J. Smola. </br>
-[KDD 2020 Oral](https://arxiv.org/pdf/2007.00216.pdf)
+[KDD 2020](https://arxiv.org/pdf/2007.00216.pdf)
 
 and its extended work:
 > Learning Interaction Models of Structured Neighborhood on Heterogeneous Information Network </br>
